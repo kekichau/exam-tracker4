@@ -1065,12 +1065,19 @@ async function analyzeAll() {
     return `${name}：${rs.length}次考試，總平均${avg}%，基礎${s1}%，閱讀${s2}%，挑戰${s3}%`;
   }).join('\n');
   try {
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,
-        system:'你是專業中文科教育顧問，請用繁體中文回答，建議具體實用。',
-        messages:[{role:'user',content:`分析學生中文考試數據：\n1.整體表現\n2.三部分強弱比較\n3.需關注的學生\n4.教學建議（3條）\n\n數據：\n${summary}`}]})});
-    const data=await res.json();
-    content.innerHTML=`<div class="ai-response">${data.content?.map(c=>c.text||'').join('')||'分析失敗'}</div>`;
+    const summary2 = summary; // capture for closure
+    const res = await gsRequest({
+      action: 'ai',
+      prompt: `分析學生中文考試數據：\n1.整體表現\n2.三部分強弱比較\n3.需關注的學生\n4.教學建議（3條）\n\n數據：\n${summary2}`,
+      system: '你是專業中文科教育顧問，請用繁體中文回答，建議具體實用。'
+    });
+    if (res.error === 'API_KEY_MISSING') {
+      content.innerHTML = `<div style="color:var(--yellow)">⚠️ 需要設定 API Key 才能使用 AI 功能。<br><br>請按下方步驟設定：<br>1. 開啟 Apps Script 編輯器<br>2. 左側齒輪「專案設定」→「指令碼屬性」<br>3. 新增屬性：名稱 <strong>ANTHROPIC_KEY</strong>，值貼上你的 API Key<br>4. API Key 格式：sk-ant-...</div>`;
+    } else if (res.error) {
+      content.innerHTML = `<div style="color:var(--red)">AI 分析失敗：${res.message||res.error}</div>`;
+    } else {
+      content.innerHTML = `<div class="ai-response">${res.text}</div>`;
+    }
   } catch(e){content.innerHTML=`<div style="color:var(--red)">連接失敗：${e.message}</div>`;}
 }
 // ===== ROSTER MANAGEMENT =====
@@ -1435,16 +1442,13 @@ async function buildAIReport(student, today) {
   }).join('\n');
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        model:'claude-sonnet-4-20250514', max_tokens:1200,
-        system:'你是專業中文科教育顧問，請用繁體中文撰寫正式的學習分析報告，語氣專業，結構清晰。',
-        messages:[{role:'user', content:`請為以下學生撰寫中文科學習分析報告，包括：\n1. 整體學習表現\n2. 各部分（基礎知識、閱讀理解、挑戰題）強弱分析\n3. 學習趨勢\n4. 具體改善建議\n\n數據：\n${summary}`}]
-      })
+    const res = await gsRequest({
+      action: 'ai',
+      prompt: `請為以下學生撰寫中文科學習分析報告，包括：\n1. 整體學習表現\n2. 各部分（基礎知識、閱讀理解、挑戰題）強弱分析\n3. 學習趨勢\n4. 具體改善建議\n\n數據：\n${summary}`,
+      system: '你是專業中文科教育顧問，請用繁體中文撰寫正式的學習分析報告，語氣專業，結構清晰。'
     });
-    const data = await res.json();
-    const text = data.content?.map(c=>c.text||'').join('') || '分析失敗';
+
+    const text = res.error ? `⚠️ ${res.message||res.error}` : res.text;
 
     win.document.body.innerHTML = `
       <div class="no-print" style="background:#1a1e35;padding:12px 24px;display:flex;align-items:center;gap:12px;margin:-40px -40px 32px">
